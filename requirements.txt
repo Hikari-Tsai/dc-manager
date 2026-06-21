@@ -1,0 +1,4 @@
+discord.py>=2.6,<3
+openai>=2.0,<3
+python-dotenv>=1.2,<2
+apscheduler>=3.11,<4
