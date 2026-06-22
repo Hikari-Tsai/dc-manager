@@ -39,6 +39,7 @@ class ModerationAnalyzer:
                     "content": (
                         "You are a Discord community moderation assistant. "
                         "Judge only the supplied message against the supplied server rules. "
+                        "Write the rule and reason fields in Traditional Chinese (繁體中文). "
                         "Return JSON only."
                     ),
                 },

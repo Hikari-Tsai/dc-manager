@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -157,6 +158,76 @@ class StartupBackfillTest(unittest.IsolatedAsyncioTestCase):
 
         message.reply.assert_awaited_once()
         self.assertIn("用法", message.reply.await_args.args[0])
+
+    async def test_notify_moderation_uses_traditional_chinese_labels_and_severity(self) -> None:
+        config = replace(
+            self.make_config(),
+            moderation_action="both",
+            direct_reply_text="Please adjust your message.",
+        )
+        client = DiscordManagerBot(config)
+        log_channel = SimpleNamespace(send=AsyncMock())
+        client.fetch_sendable_channel = AsyncMock(return_value=log_channel)  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            content="測試違規訊息",
+            author=SimpleNamespace(id=1, __str__=lambda self: "測試使用者"),
+            channel=SimpleNamespace(id=123),
+            jump_url="https://discord.example/messages/1",
+            reply=AsyncMock(),
+        )
+
+        await client.notify_moderation(
+            message,
+            {
+                "confidence": 0.87,
+                "severity": "high",
+                "rule": "",
+                "reason": "",
+            },
+        )
+
+        log_channel.send.assert_awaited_once()
+        log_text = log_channel.send.await_args.args[0]
+        self.assertIn("嚴重度：高", log_text)
+        self.assertIn("規則：未指定", log_text)
+        self.assertIn("原因：未提供", log_text)
+        self.assertNotIn("high", log_text)
+        message.reply.assert_awaited_once_with(
+            "你的訊息可能違反版規，請調整語氣或內容。",
+            mention_author=False,
+            allowed_mentions=unittest.mock.ANY,
+        )
+
+    async def test_notify_moderation_reply_includes_violated_rule(self) -> None:
+        config = replace(
+            self.make_config(),
+            moderation_action="reply",
+            direct_reply_text="請調整你的訊息內容。",
+        )
+        client = DiscordManagerBot(config)
+        message = SimpleNamespace(
+            content="測試違規訊息",
+            author=SimpleNamespace(id=1),
+            channel=SimpleNamespace(id=123),
+            jump_url="https://discord.example/messages/1",
+            reply=AsyncMock(),
+        )
+
+        await client.notify_moderation(
+            message,
+            {
+                "confidence": 0.87,
+                "severity": "medium",
+                "rule": "禁止人身攻擊",
+                "reason": "使用了針對個人的攻擊性措辭。",
+            },
+        )
+
+        message.reply.assert_awaited_once_with(
+            "請調整你的訊息內容。\n可能違反版規：禁止人身攻擊",
+            mention_author=False,
+            allowed_mentions=unittest.mock.ANY,
+        )
 
 
 if __name__ == "__main__":

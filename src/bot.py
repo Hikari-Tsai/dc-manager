@@ -16,6 +16,24 @@ from .stats import MessageStats, TAIPEI
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_MODERATION_REPLY_TEXT = "你的訊息可能違反版規，請調整語氣或內容。"
+MODERATION_SEVERITY_LABELS = {
+    "none": "無",
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+}
+
+
+def moderation_reply_text(configured_text: str, rule: object | None = None) -> str:
+    text = (configured_text or "").strip()
+    reply_text = text if any("\u4e00" <= char <= "\u9fff" for char in text) else DEFAULT_MODERATION_REPLY_TEXT
+    rule_text = str(rule or "").strip()
+    if not rule_text:
+        return reply_text
+    return f"{reply_text}\n版規：{rule_text}"
+
+
 class DiscordManagerBot(discord.Client):
     def __init__(self, config: Config) -> None:
         intents = discord.Intents.default()
@@ -215,7 +233,7 @@ class DiscordManagerBot(discord.Client):
             "**疑似違規訊息**",
             f"使用者：{message.author} ({message.author.id})",
             f"頻道：<#{message.channel.id}>",
-            f"嚴重度：{result.get('severity', 'none')}",
+            f"嚴重度：{MODERATION_SEVERITY_LABELS.get(str(result.get('severity', 'none')), '無')}",
             f"信心：{confidence}%",
             f"規則：{result.get('rule') or '未指定'}",
             f"原因：{result.get('reason') or '未提供'}",
@@ -236,7 +254,7 @@ class DiscordManagerBot(discord.Client):
 
         if self.config.moderation_action in {"reply", "both"}:
             await message.reply(
-                self.config.direct_reply_text,
+                moderation_reply_text(self.config.direct_reply_text, result.get("rule")),
                 mention_author=False,
                 allowed_mentions=discord.AllowedMentions.none(),
             )
