@@ -114,7 +114,7 @@ def load_config() -> Config:
         mod_log_channel_id=parse_channel_id(os.getenv("MOD_LOG_CHANNEL_ID")),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-        stats_interval_cron=os.getenv("STATS_INTERVAL_CRON", "*/30 * * * *"),
+        stats_interval_cron=os.getenv("STATS_INTERVAL_CRON", "0 0 * * *"),
         stats_backfill_hours=parse_non_negative_int(os.getenv("STATS_BACKFILL_HOURS"), 6),
         stats_reset_after_report=parse_bool(os.getenv("STATS_RESET_AFTER_REPORT"), True),
         keywords=[keyword.lower() for keyword in parse_list(os.getenv("KEYWORDS"))],

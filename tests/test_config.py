@@ -19,6 +19,7 @@ class ConfigRulesFileTest(unittest.TestCase):
             "STATS_CHANNEL_ID",
             "MOD_LOG_CHANNEL_ID",
             "OPENAI_API_KEY",
+            "STATS_INTERVAL_CRON",
             "STATS_BACKFILL_HOURS",
         ]:
             os.environ.pop(key, None)
@@ -62,6 +63,11 @@ class ConfigRulesFileTest(unittest.TestCase):
         config = load_config()
 
         self.assertEqual(config.stats_backfill_hours, 6)
+
+    def test_load_config_defaults_stats_interval_to_daily_report(self) -> None:
+        config = load_config()
+
+        self.assertEqual(config.stats_interval_cron, "0 0 * * *")
 
     def test_load_config_defaults_invalid_stats_backfill_hours(self) -> None:
         os.environ["STATS_BACKFILL_HOURS"] = "-1"
