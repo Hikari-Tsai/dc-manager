@@ -28,6 +28,10 @@ MOD_LOG_CHANNEL_ID=私密審核頻道ID
 OPENAI_API_KEY=你的 OpenAI API key
 RULES_FILE=rules.txt
 STATS_BACKFILL_HOURS=6
+MODERATION_MIN_CONFIDENCE=0.75
+MODERATION_BYPASS_USER_IDS=管理員使用者ID
+MODERATION_BYPASS_ROLE_IDS=管理員角色ID
+MODERATION_BYPASS_ADMINISTRATORS=true
 ```
 
 多個來源頻道用逗號分隔：
@@ -98,6 +102,24 @@ RULES_FILE=rules.txt
 ```
 
 把完整版規寫在 `rules.txt`，啟動時會送給 AI 作為判斷依據。這是嚴格模式：只要設定了 `RULES_FILE`，但檔案不存在、讀不到或內容是空的，bot 會啟動失敗並顯示設定錯誤。
+
+AI 審核只有在 AI 回傳 `violates=true`，而且 `confidence` 達到 `MODERATION_MIN_CONFIDENCE` 時才會觸發通知、回覆或刪除。預設值是 `0.75`，如果覺得太敏感可以調高，例如 `0.85`；如果漏判太多可以調低，例如 `0.65`。
+
+```dotenv
+MODERATION_MIN_CONFIDENCE=0.75
+```
+
+AI 審核會在送出 OpenAI 前檢查 bypass 名單；命中的訊息仍會被統計，但不會進行 AI 版規判斷，也不會回覆、記錄或刪除。
+
+```dotenv
+MODERATION_BYPASS_USER_IDS=111111111111111111,222222222222222222
+MODERATION_BYPASS_ROLE_IDS=333333333333333333
+MODERATION_BYPASS_ADMINISTRATORS=true
+```
+
+- `MODERATION_BYPASS_USER_IDS`：指定使用者 ID 名單。
+- `MODERATION_BYPASS_ROLE_IDS`：指定角色 ID 名單，例如管理員角色。
+- `MODERATION_BYPASS_ADMINISTRATORS`：預設 `true`，自動 bypass 具備 Discord Administrator 權限的使用者；設為 `false` 可關閉。
 
 如果不想使用 txt 檔，移除或留空 `RULES_FILE`，程式才會改用 `.env` 的 `RULES_TEXT`：
 

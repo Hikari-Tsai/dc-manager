@@ -46,6 +46,10 @@ class StartupBackfillTest(unittest.IsolatedAsyncioTestCase):
             direct_reply_text="提醒",
             delete_violating_messages=False,
             min_message_length_for_ai=3,
+            moderation_min_confidence=0.75,
+            moderation_bypass_user_ids=set(),
+            moderation_bypass_role_ids=set(),
+            moderation_bypass_administrators=True,
             rules_text="規則",
             rules_file_path=None,
             rules_file_error=None,
@@ -158,6 +162,133 @@ class StartupBackfillTest(unittest.IsolatedAsyncioTestCase):
 
         message.reply.assert_awaited_once()
         self.assertIn("用法", message.reply.await_args.args[0])
+
+    async def test_analyze_message_skips_bypassed_user(self) -> None:
+        config = replace(
+            self.make_config(),
+            openai_api_key="test-key",
+            enable_ai_moderation=True,
+            moderation_bypass_user_ids={42},
+        )
+        client = DiscordManagerBot(config)
+        client.analyzer.analyze = AsyncMock(return_value={"violates": True})  # type: ignore[method-assign]
+        client.notify_moderation = AsyncMock()  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            id=1,
+            content="這是一段會被跳過的訊息",
+            author=SimpleNamespace(
+                id=42,
+                roles=[],
+                guild_permissions=SimpleNamespace(administrator=False),
+            ),
+            channel=SimpleNamespace(id=123),
+        )
+
+        await client.analyze_message(message)
+
+        client.analyzer.analyze.assert_not_awaited()
+        client.notify_moderation.assert_not_awaited()
+
+    async def test_analyze_message_skips_bypassed_role(self) -> None:
+        config = replace(
+            self.make_config(),
+            openai_api_key="test-key",
+            enable_ai_moderation=True,
+            moderation_bypass_role_ids={99},
+        )
+        client = DiscordManagerBot(config)
+        client.analyzer.analyze = AsyncMock(return_value={"violates": True})  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            id=1,
+            content="這是一段會被跳過的訊息",
+            author=SimpleNamespace(
+                id=7,
+                roles=[SimpleNamespace(id=99)],
+                guild_permissions=SimpleNamespace(administrator=False),
+            ),
+            channel=SimpleNamespace(id=123),
+        )
+
+        await client.analyze_message(message)
+
+        client.analyzer.analyze.assert_not_awaited()
+
+    async def test_analyze_message_skips_administrator_by_default(self) -> None:
+        config = replace(
+            self.make_config(),
+            openai_api_key="test-key",
+            enable_ai_moderation=True,
+        )
+        client = DiscordManagerBot(config)
+        client.analyzer.analyze = AsyncMock(return_value={"violates": True})  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            id=1,
+            content="這是一段會被跳過的訊息",
+            author=SimpleNamespace(
+                id=7,
+                roles=[],
+                guild_permissions=SimpleNamespace(administrator=True),
+            ),
+            channel=SimpleNamespace(id=123),
+        )
+
+        await client.analyze_message(message)
+
+        client.analyzer.analyze.assert_not_awaited()
+
+    async def test_analyze_message_skips_violations_below_confidence_threshold(self) -> None:
+        config = replace(
+            self.make_config(),
+            openai_api_key="test-key",
+            enable_ai_moderation=True,
+            moderation_min_confidence=0.8,
+        )
+        client = DiscordManagerBot(config)
+        client.analyzer.analyze = AsyncMock(
+            return_value={"violates": True, "confidence": 0.79}
+        )  # type: ignore[method-assign]
+        client.notify_moderation = AsyncMock()  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            id=1,
+            content="這是一段低信心疑似違規訊息",
+            author=SimpleNamespace(
+                id=7,
+                roles=[],
+                guild_permissions=SimpleNamespace(administrator=False),
+            ),
+            channel=SimpleNamespace(id=123),
+        )
+
+        await client.analyze_message(message)
+
+        client.analyzer.analyze.assert_awaited_once()
+        client.notify_moderation.assert_not_awaited()
+
+    async def test_analyze_message_notifies_violations_at_confidence_threshold(self) -> None:
+        config = replace(
+            self.make_config(),
+            openai_api_key="test-key",
+            enable_ai_moderation=True,
+            moderation_min_confidence=0.8,
+        )
+        client = DiscordManagerBot(config)
+        result = {"violates": True, "confidence": 0.8}
+        client.analyzer.analyze = AsyncMock(return_value=result)  # type: ignore[method-assign]
+        client.notify_moderation = AsyncMock()  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            id=1,
+            content="這是一段高信心違規訊息",
+            author=SimpleNamespace(
+                id=7,
+                roles=[],
+                guild_permissions=SimpleNamespace(administrator=False),
+            ),
+            channel=SimpleNamespace(id=123),
+        )
+
+        await client.analyze_message(message)
+
+        client.notify_moderation.assert_awaited_once_with(message, result)
 
     async def test_notify_moderation_uses_traditional_chinese_labels_and_severity(self) -> None:
         config = replace(

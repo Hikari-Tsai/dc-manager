@@ -21,6 +21,10 @@ class ConfigRulesFileTest(unittest.TestCase):
             "OPENAI_API_KEY",
             "STATS_INTERVAL_CRON",
             "STATS_BACKFILL_HOURS",
+            "MODERATION_MIN_CONFIDENCE",
+            "MODERATION_BYPASS_USER_IDS",
+            "MODERATION_BYPASS_ROLE_IDS",
+            "MODERATION_BYPASS_ADMINISTRATORS",
         ]:
             os.environ.pop(key, None)
 
@@ -75,6 +79,31 @@ class ConfigRulesFileTest(unittest.TestCase):
         config = load_config()
 
         self.assertEqual(config.stats_backfill_hours, 6)
+
+    def test_load_config_reads_moderation_min_confidence(self) -> None:
+        os.environ["MODERATION_MIN_CONFIDENCE"] = "0.85"
+
+        config = load_config()
+
+        self.assertEqual(config.moderation_min_confidence, 0.85)
+
+    def test_load_config_defaults_invalid_moderation_min_confidence(self) -> None:
+        os.environ["MODERATION_MIN_CONFIDENCE"] = "1.5"
+
+        config = load_config()
+
+        self.assertEqual(config.moderation_min_confidence, 0.75)
+
+    def test_load_config_reads_moderation_bypass_settings(self) -> None:
+        os.environ["MODERATION_BYPASS_USER_IDS"] = "111, 222, invalid"
+        os.environ["MODERATION_BYPASS_ROLE_IDS"] = "333"
+        os.environ["MODERATION_BYPASS_ADMINISTRATORS"] = "false"
+
+        config = load_config()
+
+        self.assertEqual(config.moderation_bypass_user_ids, {111, 222})
+        self.assertEqual(config.moderation_bypass_role_ids, {333})
+        self.assertFalse(config.moderation_bypass_administrators)
 
 
 if __name__ == "__main__":

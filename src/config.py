@@ -36,6 +36,14 @@ def parse_non_negative_int(value: str | None, default: int) -> int:
     return parsed if parsed >= 0 else default
 
 
+def parse_probability(value: str | None, default: float) -> float:
+    try:
+        parsed = float(value or "")
+    except ValueError:
+        return default
+    return parsed if 0 <= parsed <= 1 else default
+
+
 @dataclass(frozen=True)
 class Config:
     discord_token: str
@@ -57,6 +65,10 @@ class Config:
     direct_reply_text: str
     delete_violating_messages: bool
     min_message_length_for_ai: int
+    moderation_min_confidence: float
+    moderation_bypass_user_ids: set[int]
+    moderation_bypass_role_ids: set[int]
+    moderation_bypass_administrators: bool
     rules_text: str
     rules_file_path: str | None
     rules_file_error: str | None
@@ -73,6 +85,16 @@ def parse_channel_id(value: str | None) -> int | None:
 
 
 def parse_channel_id_set(value: str | None) -> set[int]:
+    ids: set[int] = set()
+    for item in parse_list(value):
+        try:
+            ids.add(int(item))
+        except ValueError:
+            continue
+    return ids
+
+
+def parse_int_set(value: str | None) -> set[int]:
     ids: set[int] = set()
     for item in parse_list(value):
         try:
@@ -127,6 +149,13 @@ def load_config() -> Config:
         ),
         delete_violating_messages=parse_bool(os.getenv("DELETE_VIOLATING_MESSAGES"), False),
         min_message_length_for_ai=parse_int(os.getenv("MIN_MESSAGE_LENGTH_FOR_AI"), 3),
+        moderation_min_confidence=parse_probability(os.getenv("MODERATION_MIN_CONFIDENCE"), 0.75),
+        moderation_bypass_user_ids=parse_int_set(os.getenv("MODERATION_BYPASS_USER_IDS")),
+        moderation_bypass_role_ids=parse_int_set(os.getenv("MODERATION_BYPASS_ROLE_IDS")),
+        moderation_bypass_administrators=parse_bool(
+            os.getenv("MODERATION_BYPASS_ADMINISTRATORS"),
+            True,
+        ),
         rules_text=rules_text,
         rules_file_path=rules_file_path,
         rules_file_error=rules_file_error,

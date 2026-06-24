@@ -31,7 +31,7 @@ def moderation_reply_text(configured_text: str, rule: object | None = None) -> s
     rule_text = str(rule or "").strip()
     if not rule_text:
         return reply_text
-    return f"{reply_text}\n版規：{rule_text}"
+    return f"{reply_text}\n可能違反版規：{rule_text}"
 
 
 class DiscordManagerBot(discord.Client):
@@ -207,8 +207,30 @@ class DiscordManagerBot(discord.Client):
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
+    def is_moderation_bypassed(self, message: discord.Message) -> bool:
+        if message.author.id in self.config.moderation_bypass_user_ids:
+            return True
+
+        permissions = getattr(message.author, "guild_permissions", None)
+        if self.config.moderation_bypass_administrators and getattr(permissions, "administrator", False):
+            return True
+
+        role_ids = {getattr(role, "id", None) for role in getattr(message.author, "roles", [])}
+        return bool(role_ids & self.config.moderation_bypass_role_ids)
+
+    def meets_moderation_threshold(self, result: dict) -> bool:
+        if not result.get("violates"):
+            return False
+        try:
+            confidence = float(result.get("confidence", 0))
+        except (TypeError, ValueError):
+            return False
+        return confidence >= self.config.moderation_min_confidence
+
     async def analyze_message(self, message: discord.Message) -> None:
         if not self.config.enable_ai_moderation or not self.analyzer.enabled:
+            return
+        if self.is_moderation_bypassed(message):
             return
         if len((message.content or "").strip()) < self.config.min_message_length_for_ai:
             return
@@ -223,7 +245,7 @@ class DiscordManagerBot(discord.Client):
             logger.exception("AI moderation failed for message %s", message.id)
             return
 
-        if result and result.get("violates"):
+        if result and self.meets_moderation_threshold(result):
             await self.notify_moderation(message, result)
 
     async def notify_moderation(self, message: discord.Message, result: dict) -> None:
