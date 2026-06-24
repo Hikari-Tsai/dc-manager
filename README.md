@@ -1,24 +1,52 @@
 # Discord 頻道統計與 AI 版規偵測 Bot
 
-這是一個 Python Discord bot，可以：
+這是一個 Python Discord機器人，主要功能包括違反板規警告以及聊天室統計，幫助台主可以分析目前聊天室的動向
 
-- 監聽指定頻道的聊天訊息
-- 統計訊息數、發言人數、關鍵字命中、熱門字詞
-- 定時把統計摘要發到另一個頻道
-- 使用 OpenAI 做語意版規判斷
+- 監聽指定頻道的聊天訊息，連接GPT進行語意判斷是否違反板規
+- 統計訊息數、發言人數、關鍵字、熱門字詞
+- 把統計摘要發到另一個頻道(通常為私密頻道)，可定時觸發或是或由管理員手動觸發
 - 依 `.env` 設定，將違規結果回覆給觀眾、送到私密頻道、兩者都做或都不做
 
 ## 安裝
 
+1. 進入專案資料夾：
+
+```bash
+cd dc-manager
+```
+
+2. 建立並啟用 Python 虛擬環境：
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+```
+
+3. 安裝套件：
+
+```bash
 pip install -r requirements.txt
+```
+
+4. 建立 `.env` 設定檔：
+
+```bash
+cp .env.example .env
+```
+
+5. 編輯 `.env`，至少填入 Discord token、頻道 ID、OpenAI API key 與版規檔設定。
+
+6. 確認 `RULES_FILE` 指向的檔案存在且有內容。預設是 `rules.txt`。
+
+7. 啟動 bot：
+
+```bash
+python3 -m src.main
 ```
 
 ## 設定
 
-直接編輯目前資料夾的 `.env`：
+`.env` 是必要設定檔。可以先從 `.env.example` 複製，再依你的 Discord 伺服器調整：
 
 ```dotenv
 DISCORD_TOKEN=你的 Discord bot token
