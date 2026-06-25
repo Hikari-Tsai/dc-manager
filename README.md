@@ -190,3 +190,27 @@ python3 -m src.main
 這會統計最近 6 小時的來源頻道訊息。這份臨時報告不會覆蓋目前定期統計累積資料，也不會對歷史訊息執行 AI 審核或發違規通知。
 
 需要使用者有 `Manage Server` 權限。
+
+## 管理頻道轉發訊息
+
+在 `MOD_LOG_CHANNEL_ID` 管理頻道輸入：
+
+```text
+/send 訊息內容
+```
+
+或：
+
+```text
+!send 訊息內容
+```
+
+bot 會用自己的身分，把 `訊息內容` 轉發到所有 `SOURCE_CHANNEL_IDS` 來源頻道。這個指令只會在 `MOD_LOG_CHANNEL_ID` 生效，權限和 `!dcstats` 相同：需要使用者有 `Manage Server` 權限。
+
+範例：
+
+```text
+/send 今天晚上 8 點開台，歡迎大家一起來聊天！
+```
+
+為了避免誤 ping，轉發時會停用 Discord mention。

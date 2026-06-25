@@ -80,8 +80,11 @@ class DiscordManagerBot(discord.Client):
         is_source_channel = message.channel.id in self.config.source_channel_ids
         is_mod_log_channel = message.channel.id == self.config.mod_log_channel_id
 
-        if is_mod_log_channel and await self.handle_stats_command(message):
-            return
+        if is_mod_log_channel:
+            if await self.handle_send_command(message):
+                return
+            if await self.handle_stats_command(message):
+                return
         if not is_source_channel:
             return
 
@@ -157,13 +160,66 @@ class DiscordManagerBot(discord.Client):
         if should_reset:
             self.stats.reset()
 
+    def can_use_manager_commands(self, message: discord.Message) -> bool:
+        permissions = getattr(message.author, "guild_permissions", None)
+        return bool(permissions and permissions.manage_guild)
+
+    async def handle_send_command(self, message: discord.Message) -> bool:
+        parts = (message.content or "").strip().split(maxsplit=1)
+        if not parts or parts[0] not in {"/send", "!send"}:
+            return False
+
+        if not self.can_use_manager_commands(message):
+            await message.reply(
+                "你沒有權限轉發訊息。",
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return True
+
+        if len(parts) < 2 or not parts[1].strip():
+            await message.reply(
+                "用法：`/send 訊息內容` 或 `!send 訊息內容`，bot 會把訊息轉發到所有來源頻道。",
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return True
+
+        sent_count = 0
+        failed_count = 0
+        outbound_content = parts[1].strip()
+
+        for channel_id in sorted(self.config.source_channel_ids):
+            channel = await self.fetch_sendable_channel(channel_id)
+            if channel is None:
+                failed_count += 1
+                continue
+            try:
+                await channel.send(
+                    outbound_content,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+                sent_count += 1
+            except discord.HTTPException:
+                failed_count += 1
+                logger.exception("Failed to forward /send message to channel %s", channel_id)
+
+        result_text = f"已轉發到 {sent_count} 個來源頻道。"
+        if failed_count:
+            result_text += f"有 {failed_count} 個頻道無法送出。"
+        await message.reply(
+            result_text,
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        return True
+
     async def handle_stats_command(self, message: discord.Message) -> bool:
         parts = (message.content or "").strip().split()
         if not parts or parts[0] != "!dcstats":
             return False
 
-        permissions = getattr(message.author, "guild_permissions", None)
-        if not permissions or not permissions.manage_guild:
+        if not self.can_use_manager_commands(message):
             await message.reply(
                 "你沒有權限查看統計。",
                 mention_author=False,

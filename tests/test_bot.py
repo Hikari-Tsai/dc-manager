@@ -78,6 +78,121 @@ class StartupBackfillTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(channel.history_after)
         self.assertEqual(channel.history_after.tzinfo, timezone.utc)
 
+    async def test_send_command_forwards_message_from_mod_log_channel(self) -> None:
+        client = DiscordManagerBot(replace(self.make_config(), source_channel_ids={123, 124}))
+        first_channel = SimpleNamespace(send=AsyncMock())
+        second_channel = SimpleNamespace(send=AsyncMock())
+        channels = {123: first_channel, 124: second_channel}
+        client.fetch_sendable_channel = AsyncMock(side_effect=lambda channel_id: channels[channel_id])  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            guild=SimpleNamespace(id=1),
+            content="/send 今天晚上 8 點開台",
+            author=SimpleNamespace(
+                bot=False,
+                guild_permissions=SimpleNamespace(manage_guild=True),
+            ),
+            channel=SimpleNamespace(id=789),
+            reply=AsyncMock(),
+        )
+
+        await client.on_message(message)
+
+        first_channel.send.assert_awaited_once_with(
+            "今天晚上 8 點開台",
+            allowed_mentions=unittest.mock.ANY,
+        )
+        second_channel.send.assert_awaited_once_with(
+            "今天晚上 8 點開台",
+            allowed_mentions=unittest.mock.ANY,
+        )
+        message.reply.assert_awaited_once()
+        self.assertIn("已轉發到 2 個來源頻道", message.reply.await_args.args[0])
+
+    async def test_bang_send_command_forwards_message_from_mod_log_channel(self) -> None:
+        client = DiscordManagerBot(self.make_config())
+        channel = SimpleNamespace(send=AsyncMock())
+        client.fetch_sendable_channel = AsyncMock(return_value=channel)  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            guild=SimpleNamespace(id=1),
+            content="!send 今天晚上 8 點開台",
+            author=SimpleNamespace(
+                bot=False,
+                guild_permissions=SimpleNamespace(manage_guild=True),
+            ),
+            channel=SimpleNamespace(id=789),
+            reply=AsyncMock(),
+        )
+
+        await client.on_message(message)
+
+        channel.send.assert_awaited_once_with(
+            "今天晚上 8 點開台",
+            allowed_mentions=unittest.mock.ANY,
+        )
+        message.reply.assert_awaited_once()
+
+    async def test_send_command_requires_manage_guild_permission(self) -> None:
+        client = DiscordManagerBot(self.make_config())
+        client.fetch_sendable_channel = AsyncMock()  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            guild=SimpleNamespace(id=1),
+            content="/send 測試",
+            author=SimpleNamespace(
+                bot=False,
+                guild_permissions=SimpleNamespace(manage_guild=False),
+            ),
+            channel=SimpleNamespace(id=789),
+            reply=AsyncMock(),
+        )
+
+        await client.on_message(message)
+
+        client.fetch_sendable_channel.assert_not_awaited()
+        message.reply.assert_awaited_once()
+        self.assertIn("沒有權限", message.reply.await_args.args[0])
+
+    async def test_send_command_requires_message_content(self) -> None:
+        client = DiscordManagerBot(self.make_config())
+        client.fetch_sendable_channel = AsyncMock()  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            guild=SimpleNamespace(id=1),
+            content="/send",
+            author=SimpleNamespace(
+                bot=False,
+                guild_permissions=SimpleNamespace(manage_guild=True),
+            ),
+            channel=SimpleNamespace(id=789),
+            reply=AsyncMock(),
+        )
+
+        await client.on_message(message)
+
+        client.fetch_sendable_channel.assert_not_awaited()
+        message.reply.assert_awaited_once()
+        self.assertIn("用法", message.reply.await_args.args[0])
+
+    async def test_send_command_is_ignored_outside_mod_log_channel(self) -> None:
+        client = DiscordManagerBot(self.make_config())
+        client.fetch_sendable_channel = AsyncMock()  # type: ignore[method-assign]
+        client.analyze_message = AsyncMock()  # type: ignore[method-assign]
+        message = SimpleNamespace(
+            guild=SimpleNamespace(id=1),
+            content="/send 測試",
+            author=SimpleNamespace(
+                id=7,
+                bot=False,
+                guild_permissions=SimpleNamespace(manage_guild=True),
+            ),
+            channel=SimpleNamespace(id=123),
+            reply=AsyncMock(),
+        )
+
+        await client.on_message(message)
+
+        client.fetch_sendable_channel.assert_not_awaited()
+        message.reply.assert_not_awaited()
+        client.analyze_message.assert_awaited_once_with(message)
+
     async def test_stats_command_can_run_from_mod_log_channel(self) -> None:
         client = DiscordManagerBot(self.make_config())
         message = SimpleNamespace(
